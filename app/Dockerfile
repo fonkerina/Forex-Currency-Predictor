@@ -10,6 +10,12 @@ ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 COPY . /app
 
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
 # Install pip requirements
 COPY requirements.txt .
 RUN python -m pip install -r requirements.txt
@@ -22,3 +28,5 @@ EXPOSE 8501
 
 # During debugging, this entry point will be overridden. For more information, please refer to https://aka.ms/vscode-docker-python-debug
 CMD ["streamlit","run", "app.py"]
+
+HEALTHCHECK CMD curl --fail http://localhost:8501/_stcore/health

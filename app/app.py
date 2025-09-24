@@ -1,4 +1,3 @@
-from autots import AutoTS
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -13,7 +12,7 @@ import pickle
 from tensorflow.keras.models import load_model
 from sklearn.preprocessing import MinMaxScaler
 import streamlit as st
-st.title(("Future Forex Currency Price Prediction Model"))
+st.title(("Forex Currency Trend Predictor"))
 
 options = {
     'AUSTRALIAN DOLLAR': 'AUSTRALIA - AUSTRALIAN DOLLAR/US$',
@@ -42,7 +41,7 @@ options = {
 
 def get_data (filename):
     """ Function to call data from a named data folder and apply preprocessing"""
-    filepath = f"data/{filename}"
+    filepath = f"app/data/{filename}"
         
     if os.path.exists(filepath):
         
@@ -79,13 +78,15 @@ def make_forecast(forecast_length, currency, data):
         filename = str(re.sub(r'[^\w\-]', '_', currency))
         print(f'Filename/Currency: {filename}')
         
-        lstm_path = f"models/{filename}.h5"
-        other_path = f"models/{filename}.pkl"
+        lstm_path = f"app/models/{filename}.h5"
+        other_path = f"app/models/{filename}.pkl"
+        
+        currency_column = options[currency]
         
         if os.path.exists(lstm_path):
             
-            model = load_model(lstm_path)
-            data = data[currency].values.reshape(-1, 1)
+            model = load_model(lstm_path, compile = False)
+            data = data[currency_column].values.reshape(-1, 1)
             scaler = MinMaxScaler()
             scaled_data = scaler.fit_transform(data)
             
@@ -110,6 +111,8 @@ def make_forecast(forecast_length, currency, data):
             X_train = X_train.reshape(X_train.shape[0], X_train.shape[1], 1)
             X_test = X_test.reshape(X_test.shape[0], X_test.shape[1], 1)
             
+            model.compile(optimizer='adam', loss='mse', metrics = ['mae'])
+            
             history = model.fit(
                 X_train, y_train,
                 batch_size=32,
@@ -119,8 +122,7 @@ def make_forecast(forecast_length, currency, data):
             )
             
             # Make predictions
-            future_dates = pd.date_range(start="2019-12-31", end="2026-12-31", freq="YE")
-            steps = len(future_dates)
+            steps = forecast_length
             
             def forecast_lstm(model, last_sequence, steps, scaler):
                 forecast = []
@@ -140,9 +142,8 @@ def make_forecast(forecast_length, currency, data):
                 return forecast
             
             last_sequence = X_test[-1].flatten()
-            lstm_preds = forecast_lstm(model, last_sequence, steps, scaler)
-            forecast = lstm_preds()
-            
+            forecast = forecast_lstm(model, last_sequence, steps, scaler)
+        
             return forecast
         
         elif os.path.exists(other_path):
@@ -171,7 +172,7 @@ with st.form(key='user_form'):
     
     selected_option = st.selectbox('Choose a currency:', options)
     forecast_length = st.number_input(
-    "Enter yearly forecast length",  # Label displayed to the user
+    "Enter number of forecast periods",  # Label displayed to the user
     min_value=1,         # Minimum value allowed
     max_value=20,      # Maximum value allowed
     value=3,            # Default value
@@ -182,8 +183,19 @@ with st.form(key='user_form'):
 if submit_button:
     data_cleaned = get_data("Foreign_Exchange_Rates.xls")
     forecast_result = make_forecast(forecast_length, selected_option, data_cleaned)
+    future_dates = pd.date_range(start="2019-12-31", end="2039-12-31", freq="YE")
+    future_dates = future_dates[:forecast_length]
     
-    st.subheader(f"Forecast for {forecast_length} years:")
-    st.write(forecast_result)
-    st.line_chart(forecast_result)
-    st.dataframe(forecast_result)
+    final_forecast = pd.DataFrame({
+    "Year": future_dates,
+    "Forecast": forecast_result
+    })
+    
+    st.subheader(f"Yearly forecast for {selected_option}:")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.dataframe(final_forecast)
+    
+    with col2:
+        st.line_chart(final_forecast.set_index("Year"))
