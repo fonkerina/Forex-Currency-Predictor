@@ -199,3 +199,5 @@ if submit_button:
     
     with col2:
         st.line_chart(final_forecast.set_index("Year"))
+        
+        print(final_forecast)
